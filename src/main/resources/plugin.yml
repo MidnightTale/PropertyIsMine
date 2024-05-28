@@ -1,0 +1,4 @@
+name: PropertyIsMine
+version: '${version}'
+main: net.hynse.propertyismine.PropertyIsMine
+api-version: '1.20'
