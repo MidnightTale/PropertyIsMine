@@ -2,6 +2,7 @@ package net.hynse.propertyismine;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.block.Chest;
@@ -19,6 +20,7 @@ import java.util.UUID;
 public final class PropertyIsMine extends JavaPlugin implements Listener {
 
     private final NamespacedKey ownerKey = new NamespacedKey(this, "owner");
+    private final NamespacedKey lockedKey = new NamespacedKey(this, "locked");
 
     @Override
     public void onEnable() {
@@ -38,17 +40,35 @@ public final class PropertyIsMine extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onChestInteract(PlayerInteractEvent event) {
+        Player player = event.getPlayer();
         Block block = event.getClickedBlock();
         if (block != null && block.getState() instanceof Chest) {
+            Chest chest = (Chest) block.getState();
             UUID ownerUUID = getOwner(block);
             if (ownerUUID == null) {
-                event.getPlayer().sendMessage(ChatColor.RED + "This chest is unclaimed.");
-            } else {
-                Player owner = Bukkit.getPlayer(ownerUUID);
-                if (owner != null) {
-                    event.getPlayer().sendMessage(ChatColor.GREEN + "This chest belongs to " + owner.getName());
+                player.sendMessage(ChatColor.RED + "This chest is unclaimed.");
+                return;
+            }
+            if (event.getPlayer().isSneaking() && player.getInventory().getItemInMainHand().getType() == Material.STICK) {
+                if (ownerUUID.equals(player.getUniqueId())) {
+                    // Lock the chest
+                    chest.getPersistentDataContainer().set(lockedKey, PersistentDataType.BYTE, (byte) 1);
+                    chest.update();
+                    player.sendMessage(ChatColor.GREEN + "Chest locked successfully!");
                 } else {
-                    event.getPlayer().sendMessage(ChatColor.GREEN + "This chest belongs to an offline player.");
+                    player.sendMessage(ChatColor.RED + "You can only lock chests you own.");
+                }
+            } else {
+                if (isChestLocked(chest)) {
+                    if (ownerUUID.equals(player.getUniqueId()) || player.hasPermission("chest.unlock")) {
+                        // Allow owner or players with permission to open the locked chest
+                        player.sendMessage(ChatColor.GREEN + "This chest is locked. You can still access it.");
+                    } else {
+                        player.sendMessage(ChatColor.RED + "This chest is locked. Only the owner can open it.");
+                        event.setCancelled(true);
+                    }
+                } else {
+                    player.sendMessage(ChatColor.GREEN + "This chest belongs to " + Bukkit.getPlayer(ownerUUID).getName());
                 }
             }
         }
@@ -82,4 +102,7 @@ public final class PropertyIsMine extends JavaPlugin implements Listener {
         }
     }
 
+    private boolean isChestLocked(Chest chest) {
+        return chest.getPersistentDataContainer().has(lockedKey, PersistentDataType.BYTE);
+    }
 }
